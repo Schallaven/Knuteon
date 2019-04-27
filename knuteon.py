@@ -60,11 +60,12 @@ def main():
 	parser = argparse.ArgumentParser(
 				description = 'Knuteon! This program extracts the data from Karat32 data files.')
 
-	parser.add_argument('inputfile', action='store', nargs=1, type=str)
+	parser.add_argument('inputfile', action = 'store', nargs = 1, type = str)
 
-	parser.add_argument('-v', '--version', help = 'prints version information', action='version', version='Knuteon! 1.0 by Sven Kochmann')
-	parser.add_argument('-f', '--list_files', help = 'lists all files and streams in the data file', action='store_true')
-	parser.add_argument('-i', '--print_header', help = 'prints only the header information (chrom header)', action='store_true')
+	parser.add_argument('-v', '--version', help = 'prints version information', action = 'version', version = 'Knuteon! 1.0 by Sven Kochmann')
+	parser.add_argument('-f', '--list_files', help = 'lists all files and streams in the data file', action = 'store_true')
+	parser.add_argument('-i', '--print_header', help = 'prints only the header information (chrom header)', action = 'store_true')
+	parser.add_argument('-t', '--list_traces', help = 'lists all traces in the data file', action = 'store_true')
 
 	args = vars(parser.parse_args())
 
@@ -90,16 +91,26 @@ def main():
 		print("%d files and streams found." % (len(files)))		
 		exit()
 
-	print(basename)
-	
-	header = read_chrom_header(ole)
-	header.update({'filename': basename})
+	print(basename)	
 
 	if args['print_header']:		
-		for key in sorted(header):
-			print("%12s: %s" % (key.capitalize(), header[key]))
+		print_header_info(ole, basename)
 		exit()
 
+	if args['list_traces']:
+		list_traces(ole)
+		exit()
+
+
+######################################################################
+# Prints the  general header information of  the given data file. Adds
+# basename as "filename" to the list.
+def print_header_info(ole):
+	header = read_chrom_header(ole, basename)
+	header.update({'filename': basename})
+
+	for key in sorted(header):
+		print("%12s: %s" % (key.capitalize(), header[key]))
 
 
 ######################################################################
