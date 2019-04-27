@@ -50,6 +50,7 @@ import datetime
 import math
 import olefile
 import os
+import pathlib
 import pwexplode
 import struct
 
@@ -62,8 +63,8 @@ def main():
 	parser.add_argument('inputfile', action='store', nargs=1, type=str)
 
 	parser.add_argument('-v', '--version', help = 'prints version information', action='version', version='Knuteon! 1.0 by Sven Kochmann')
-	parser.add_argument('-l', '--list', help = 'lists all files and streams in the data file', action='store_true')
-	parser.add_argument('-ph', '--print_header', help = 'prints only the header information (chrom header)', action='store_true')
+	parser.add_argument('-f', '--list_files', help = 'lists all files and streams in the data file', action='store_true')
+	parser.add_argument('-i', '--print_header', help = 'prints only the header information (chrom header)', action='store_true')
 
 	args = vars(parser.parse_args())
 
@@ -77,7 +78,7 @@ def main():
 	ole = olefile.OleFileIO(args['inputfile'][0])
 	basename = os.path.splitext(args['inputfile'][0])[0]
 
-	if args['list']:
+	if args['list_files']:
 		tree = []
 		files = ole.listdir(True)
 
@@ -92,9 +93,11 @@ def main():
 	print(basename)
 	
 	header = read_chrom_header(ole)
+	header.update({'filename': basename})
 
-	if args['print_header']:
-		print(header)
+	if args['print_header']:		
+		for key in sorted(header):
+			print("%12s: %s" % (key.capitalize(), header[key]))
 		exit()
 
 
@@ -171,7 +174,7 @@ def variant_to_system_time(oletime):
 # Reads 'chrom header' from the OLE data file and returns its contents
 # as a dictionary
 def read_chrom_header(ole):
-	headerinfo = {'runtime': datetime.datetime(1899, 12, 30), 'method': '', 'description': '', 
+	headerinfo = {'runtime': datetime.datetime(1899, 12, 30), 'method name': '', 'method path': '', 'description': '', 
 				  'version': '', 'system': '', 'detector': ''}
 
 	chromhead = ole.openstream('Chrom Header')
@@ -187,23 +190,25 @@ def read_chrom_header(ole):
 	# description,  version info,  and system info  each encoded as a 
 	# C-string (length as a byte + the string itself, max 255 bytes)
 	length = struct.unpack('B', chromhead.read(1))[0]
-	headerinfo['method'] = chromhead.read(length)
+	method = pathlib.PureWindowsPath(chromhead.read(length).decode())
+	headerinfo['method name'] = method.name
+	headerinfo['method path'] =	method.parent
 
 	length = struct.unpack('B', chromhead.read(1))[0]
-	headerinfo['description'] = chromhead.read(length)
+	headerinfo['description'] = chromhead.read(length).decode()
 
 	length = struct.unpack('B', chromhead.read(1))[0]
-	headerinfo['version'] = chromhead.read(length)
+	headerinfo['version'] = chromhead.read(length).decode()
 
 	length = struct.unpack('B', chromhead.read(1))[0]
-	headerinfo['system'] = chromhead.read(length)
+	headerinfo['system'] = chromhead.read(length).decode()
 
 	# Next 22 bytes are unknown, just read to skip
 	chromhead.read(22)
 
 	# Detector string encoded as C-String (see above)
 	length = struct.unpack('B', chromhead.read(1))[0]
-	headerinfo['detector'] = chromhead.read(length)
+	headerinfo['detector'] = chromhead.read(length).decode()
 
 	return headerinfo
 
