@@ -52,7 +52,14 @@ import olefile
 import os
 import pathlib
 import pwexplode
+import signal
 import struct
+
+# This fixes Python's default behaviour  of throwing an exception when
+# pipe reading (e.g. with 'head')  suddenly stops. Who though this was
+# a good default behaviour anyway?  This will  not work under Windows.
+if os.name is 'posix':
+	signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
 
 # Main program of Knuteon!
