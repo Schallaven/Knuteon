@@ -88,29 +88,144 @@ def main():
 	
 		print(args['inputfile'][0])
 		list_data_files(tree, 0)
+
+		print("")
 		print("%d files and streams found." % (len(files)))		
+		print("")
 		exit()
 
 	print(basename)	
+	header = read_chrom_header(ole)
+	header.update({'filename': basename})
 
-	if args['print_header']:		
-		print_header_info(ole, basename)
+	if args['print_header']:	
+		for key in sorted(header):
+			print("%12s: %s" % (key.capitalize(), header[key]))
+		print("")
 		exit()
 
+	traces = read_traces(ole)
+
 	if args['list_traces']:
-		list_traces(ole)
+		for trace in traces:
+			print('Detector Data/Detector %s Trace' % (trace['id']))
+			for key in sorted(trace):
+				if '(internal)' not in key:
+					#print(" ↳ ", end = '')
+					print("%15s: %s" % (key.capitalize(), trace[key]))
+			print("")
+
+		print("%d traces found." % (len(traces)))		
+		print("")
 		exit()
 
 
 ######################################################################
-# Prints the  general header information of  the given data file. Adds
-# basename as "filename" to the list.
-def print_header_info(ole):
-	header = read_chrom_header(ole, basename)
-	header.update({'filename': basename})
+# Reads all traces  in the given data file  and returns them as a list
+# of dictionaries
+def read_traces(ole):
+	# A blank trace dictionary
+	trace_dict = {'id': '', 'y-axis name': '', 'y-axis name (internal)': '', 'y-axis unit': '', 'y-axis unit (internal)': '',
+				  'sample rate': 0.0, 'multiplier': 1.0, 'x-axis name': '', 'x-axis name (internal)': '', 'maximum time': 0.0}
+	traces = []
 
-	for key in sorted(header):
-		print("%12s: %s" % (key.capitalize(), header[key]))
+	# Traces are all saved in 'Detector Trace Handler',  so let's read
+	# it and collect the information in there
+	data_dth = ole.openstream('Detector Trace Handler')
+
+	# Unfortunately, the first 20 Bytes are unknown, just skip
+	data_dth.read(20)
+
+	# 2 Bytes (Word) give  the number of signals followed by 4 unknown
+	# bytes (that are usually FFFF0000), which we skip
+	nosignals = struct.unpack('<H', data_dth.read(2))[0]
+	data_dth.read(4)
+
+	# Next up  is  an identifier string (length + string itself)  that
+	# should always be 'CDetTracInfo'.  This is a soft check for this,
+	# i.e. if it is NOT we just print a warning but go on!
+	length = struct.unpack('<H', data_dth.read(2))[0]
+	identifier = data_dth.read(length).decode()
+	if identifier != "CDetTraceInfo":
+		print("Warning: 'Detector Trace Handler' is not of type 'CDetTraceInfo'")
+	
+	# Now, there is a block for each signal
+	for i in range(nosignals):
+		# Create a COPY of the empty dictionary!
+		tracedata = trace_dict.copy()
+
+		# 4 Bytes are unknown, just skip
+		data_dth.read(4)
+
+		# These 4 bytes give some sort of  type number, followed again
+		# by 4 unknown bytes, which we skip
+		typeno = struct.unpack('<I', data_dth.read(4))[0]
+		data_dth.read(4)
+
+		# There are two known types so far: 8 and 9, which just define
+		# how the detector trace ID is encoded:
+		# Type 8: trace ID = integer
+		# Type 9: trace ID = string
+		if typeno == 8:
+			tracedata['id'] = str(struct.unpack('<I', data_dth.read(4))[0])
+		elif typeno == 9:
+			length = struct.unpack('B', data_dth.read(1))[0]
+			tracedata['id'] = data_dth.read(length).decode()
+		else:
+			print("Warning: type %d unknown for signal trace %d" % (typeno, i+1))
+
+		# 4 Bytes are unknown, just skip
+		data_dth.read(4)
+
+		# Next bytes encode signal name (y-axis), sample rate (in Hz), 
+		# unit (y-axis), multiplier, x-axis name, maximum time, y-axis
+		# name  (internal),   y-axis  unit  (internal),   x-axis  name 
+		# (internal)
+		length = struct.unpack('B', data_dth.read(1))[0]
+		tracedata['y-axis name'] = data_dth.read(length).decode()
+
+		tracedata['sample rate'] = (1.0/float(struct.unpack('<f', data_dth.read(4))[0]))
+
+		length = struct.unpack('B', data_dth.read(1))[0]
+		tracedata['y-axis unit'] = data_dth.read(length).decode('cp1252', errors = 'ignore')
+
+		tracedata['multiplier'] = float(struct.unpack('<f', data_dth.read(4))[0])
+
+		length = struct.unpack('B', data_dth.read(1))[0]
+		tracedata['x-axis name'] = data_dth.read(length).decode()
+
+		# These  are  two floats (4 bytes each).  The first one is not
+		# known, so we just skip it for now.  It could be the steps in
+		# minutes  for  each  data point  acquired  (redundant  sample 
+		# rate).  The second one is  the maximum time (in seconds) set  
+		# by  the user  when setting up  the method.  But it  does not 
+		# mean this time was reached!  Indeed,  the user can stop  the 
+		# measurement at any time giving less  data points in the end.
+		# These floats are followed by 24 unknown bytes, which we just 
+		# ignore.
+		struct.unpack('<f', data_dth.read(4))[0]
+		tracedata['maximum time'] = struct.unpack('<f', data_dth.read(4))[0]
+		data_dth.read(24)
+
+		length = struct.unpack('B', data_dth.read(1))[0]
+		tracedata['y-axis name (internal)'] = data_dth.read(length).decode()
+
+		length = struct.unpack('B', data_dth.read(1))[0]
+		tracedata['y-axis unit (internal)'] = data_dth.read(length).decode('cp1252', errors = 'ignore')
+
+		# 8 Bytes are unknown, just skip
+		data_dth.read(8)
+
+		length = struct.unpack('B', data_dth.read(1))[0]
+		tracedata['x-axis name (internal)'] = data_dth.read(length).decode()
+
+		# Last 26 bytes are unknown, skip and go one with next trace
+		data_dth.read(26)
+
+		# Add to output
+		traces.append(tracedata)		
+
+	return traces
 
 
 ######################################################################
