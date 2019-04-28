@@ -71,15 +71,16 @@ def main():
 	parser.add_argument('inputfile', action = 'store', nargs = 1, type = str)
 
 	parser.add_argument('-v', '--version', help = 'prints version information', action = 'version', version = 'Knuteon! 1.0 by Sven Kochmann')
-	parser.add_argument('-f', '--list_files', help = 'lists all files and streams in the data file', action = 'store_true')
-	parser.add_argument('-i', '--print_header', help = 'prints only the header information (chrom header)', action = 'store_true')
-	parser.add_argument('-t', '--list_traces', help = 'lists all traces in the data file', action = 'store_true')
+	
+	group = parser.add_mutually_exclusive_group()
+	group.add_argument('-a', '--all', help = 'extracts all detector traces and saves them as files', action = 'store_true', default = 'True')
+	group.add_argument('-f', '--list_files', help = 'lists all files and streams in the data file', action = 'store_true')
+	group.add_argument('-i', '--print_header', help = 'prints only the header information (chrom header)', action = 'store_true')
+	group.add_argument('-t', '--list_traces', help = 'lists all traces in the data file', action = 'store_true')
 
-	parser.add_argument('-e', '--extract_trace', metavar = 'ID', help = 'extracts the single trace given by ID and prints it to stdout', type = str, default = '')
+	group.add_argument('-e', '--extract_trace', metavar = 'ID', help = 'extracts the single trace given by ID and prints it to stdout', type = str, default = '')
 
 	args = vars(parser.parse_args())
-
-	print(args)
 
 	# Opening of file, reading of header information
 	if olefile.isOleFile(args['inputfile'][0]) == False:
@@ -104,7 +105,6 @@ def main():
 		print("")
 		exit()
 
-	print(basename)	
 	header = read_chrom_header(ole)
 	header.update({'filename': basename})
 
@@ -121,8 +121,13 @@ def main():
 			print('Detector Data/Detector %s Trace' % (trace['id']))
 			for key in sorted(trace):
 				if '(internal)' not in key:
-					#print(" ↳ ", end = '')
-					print("%15s: %s" % (key.capitalize(), trace[key]))
+					print("%15s: %s" % (key.capitalize(), trace[key]), end = '')
+					if key == 'maximum time':
+						print(" s")
+					elif key == 'sample rate':
+						print(" Hz")
+					else:
+						print("")
 			print("")
 
 		print("%d traces found." % (len(traces)))		
@@ -145,6 +150,40 @@ def main():
 		for point in data:
 			print("%8.2f\t%8.5e" % (point[0], point[1]))
 		print("%d data points acquired." % (len(data)))
+		print("")
+		exit()
+
+	# Main and default function:  write all traces to individual files
+	# including description and header	
+	if args['all']:
+		for trace in traces:
+			outputname = basename + "." + trace['id'] + ".txt"
+			print("Writing %s..." % (outputname))
+
+			with open(outputname, 'w') as tracefile:
+				for key in sorted(header):
+					tracefile.write("%12s: %s\n" % (key.capitalize(), header[key]))
+				tracefile.write("\n")
+				
+				tracefile.write("Detector Data/Detector %s Trace\n" % (trace['id']))
+				for key in sorted(trace):
+					if '(internal)' not in key:
+						tracefile.write("%15s: %s" % (key.capitalize(), trace[key]))
+						if key == 'maximum time':
+							tracefile.write(" s")
+						elif key == 'sample rate':
+							tracefile.write(" Hz")
+						tracefile.write("\n")
+				tracefile.write("\n")
+
+				data = extract_trace(ole, trace)
+				tracefile.write("%s\t%s (%s)\n" % ("Time (s)", trace['y-axis name'], trace['y-axis unit']))
+				for point in data:
+					tracefile.write("%f\t%e\n" % (point[0], point[1]))
+
+				tracefile.write("\n\n")
+
+		print("%d traces written." % (len(traces)))	
 		print("")
 		exit()
 
@@ -172,7 +211,7 @@ def extract_trace(ole, header):
 	# Other compression methods are not known or not used.
 	if compression == 1:
 		# The data is chunked into blocks of 2048. As soon as we read
-		# a block of of less, we have all the data! 
+		# a block of less, we have all the data! 
 		readablock = True
 		compresseddata = ""
 		while readablock:
@@ -277,9 +316,13 @@ def read_traces(ole):
 
 		tracedata['multiplier'] = float(struct.unpack('<f', data_dth.read(4))[0])
 
+		# Technically,  this will usually lead to  'Minutes'.  However 
+		# the actual data is saved and decoded in seconds.  Therefore,
+		# we replace it here by the more accurate 'Time (s)'.
 		length = struct.unpack('B', data_dth.read(1))[0]
-		tracedata['x-axis name'] = data_dth.read(length).decode()
-
+		data_dth.read(length)
+		tracedata['x-axis name'] = "Time (s)"
+		
 		# These  are  two floats (4 bytes each).  The first one is not
 		# known, so we just skip it for now.  It could be the steps in
 		# minutes  for  each  data point  acquired  (redundant  sample 
@@ -425,6 +468,9 @@ def read_chrom_header(ole):
 	return headerinfo
 
 
+######################################################################
+# Little trick  to allow  the main program  in the beginning  but  all
+# the function definitions at the end
 if __name__ == '__main__':
     main()
 
