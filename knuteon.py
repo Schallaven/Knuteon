@@ -54,6 +54,7 @@ import pathlib
 import pwexplode
 import struct
 
+
 # Main program of Knuteon!
 def main():
 	# Argument setup and parsing
@@ -66,6 +67,8 @@ def main():
 	parser.add_argument('-f', '--list_files', help = 'lists all files and streams in the data file', action = 'store_true')
 	parser.add_argument('-i', '--print_header', help = 'prints only the header information (chrom header)', action = 'store_true')
 	parser.add_argument('-t', '--list_traces', help = 'lists all traces in the data file', action = 'store_true')
+
+	parser.add_argument('-e', '--extract_trace', metavar = 'ID', help = 'extracts the single trace given by ID and prints it to stdout', type = str, default = '')
 
 	args = vars(parser.parse_args())
 
@@ -118,6 +121,82 @@ def main():
 		print("%d traces found." % (len(traces)))		
 		print("")
 		exit()
+
+	if len(args['extract_trace']) > 0:
+		traceheader = {'id': ''}
+		for trace in traces:
+			if trace['id'] == args['extract_trace']:
+				traceheader = trace
+				break
+
+		if len(traceheader['id']) == 0:
+			print("Error: No trace with ID %s found." % (args['extract_trace']))
+			exit()
+
+		data = extract_trace(ole, traceheader)
+		print("%8s\t%8s (%s)" % ("Time (s)", traceheader['y-axis name'], traceheader['y-axis unit']))
+		for point in data:
+			print("%8.2f\t%8.5e" % (point[0], point[1]))
+		print("%d data points acquired." % (len(data)))
+		print("")
+		exit()
+
+
+######################################################################
+# Extracts  the actual trace data  and  returns it as  list of tuples.
+# This function needs  the header information gotten by "read_traces".
+# Data  might  actually be compressed by PKWARE compression,  which is
+# handled by the pwexplode library. 
+def extract_trace(ole, header):
+	datapoints = []
+	datastream = ole.openstream(['Detector Data', 'Detector %s Trace' % header['id']])
+
+	# The stream starts  with 5 integers:  version,  number of points,
+	# maximum points, channels, compression flag. Right now, we ignore
+	# everything except the number of points and the compression flag.
+	version = struct.unpack('<I', datastream.read(4))[0]
+	nopoints = struct.unpack('<I', datastream.read(4))[0]
+	maxpoints = struct.unpack('<I', datastream.read(4))[0] 
+	channels = struct.unpack('<I', datastream.read(4))[0]
+	compression = struct.unpack('<I', datastream.read(4))[0]
+
+	decompressedata = ""
+	# Compression is 1  if PWWARE compression  was used  for the data.
+	# Other compression methods are not known or not used.
+	if compression == 1:
+		# The data is chunked into blocks of 2048. As soon as we read
+		# a block of of less, we have all the data! 
+		readablock = True
+		compresseddata = ""
+		while readablock:
+			length = struct.unpack('<H', datastream.read(2))[0]
+			compresseddata += datastream.read(length)
+
+			if not length == 2048:
+				readablock = False
+
+		# Decompress all the data
+		decompresseddata = pwexplode.explode(compresseddata)
+	else:
+		# Each data point is an integer of 4 bytes, read all in here
+		decompresseddata = datastream.read(nopoints * 4)
+
+	# Convert  the list of integers  into (time, signal)-tuples.  Time 
+	# is given by  the index of  the data point  and  the sample rate,
+	# while  the actual signal is given by  the data point integer and
+	# the multiplier. Note, that the time is actually saved in seconds
+	# but always presented as minutes. We keep seconds here.
+	pos = 0
+	for i in range(nopoints):
+		datapoint = struct.unpack('<I', decompresseddata[pos:pos + 4])[0]
+		pos += 4
+
+		time = i / header['sample rate']
+		signal = datapoint * header['multiplier']
+		
+		datapoints.append((time, signal))
+
+	return datapoints
 
 
 ######################################################################
