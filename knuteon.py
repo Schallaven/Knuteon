@@ -206,7 +206,7 @@ def extract_trace(ole, header):
 	channels = struct.unpack('<I', datastream.read(4))[0]
 	compression = struct.unpack('<I', datastream.read(4))[0]
 
-	decompressedata = ""
+	decompresseddata = ""
 	# Compression is 1  if PWWARE compression  was used  for the data.
 	# Other compression methods are not known or not used.
 	if compression == 1:
