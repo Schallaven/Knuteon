@@ -1,5 +1,7 @@
 # Knuteon
 
+[![DOI](https://zenodo.org/badge/181410010.svg)](https://zenodo.org/badge/latestdoi/181410010)
+
 ``Knuteon!`` is a small and handy command-line-based application that allows extracting individual data signals from *Karat&nbsp;32* data files. The extracted data signals are then saved as simple text files, which can easily processed by other applications.
 
 ``Knuteon!`` is easy to use on any platform that supports Python and also provides some command line parameters to extract specific traces or header information of a data file. The program is released under the GNU General Public License 3 (GPLv3) and I hope that it is of use for the capillary electrophoresis community.
