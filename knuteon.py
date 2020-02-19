@@ -234,7 +234,7 @@ def extract_trace(ole, header):
 	# but always presented as minutes. We keep seconds here.
 	pos = 0
 	for i in range(nopoints):
-		datapoint = struct.unpack('<I', decompresseddata[pos:pos + 4])[0]
+		datapoint = struct.unpack('<i', decompresseddata[pos:pos + 4])[0]
 		pos += 4
 
 		time = i / header['sample rate']
