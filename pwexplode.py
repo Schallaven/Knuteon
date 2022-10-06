@@ -3,7 +3,7 @@
 
 # pwexplode.py - implementation of the PKWARE Data Compression Library 
 # format (imploding) for byte streams
-# Copyright (C) 2019 by Sven Kochmann
+# Copyright (C) 2022 by Sven Kochmann
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -66,7 +66,7 @@ def is_bitstring(bitstring):
 
     # Check
     for character in bitstring:
-        if character is not '0' and character is not '1':
+        if character != '0' and character != '1':
             return False
 
     # Passed the check
@@ -420,8 +420,8 @@ def explode(compressedstring):
                 # Print
                 debug_print("Found non-coded literal '%s' by reading in 8 bits" % pchar)
 
-            # Add to output data
-            decompresseddata += pchar.encode("UTF-8")
+            # Add a _single_ byte to output data
+            decompresseddata += struct.pack('B', ord(pchar))
 
         # Copy instructions!
         elif bit == '1':
@@ -521,7 +521,7 @@ def explode(compressedstring):
                 decompresseddata += decompresseddata[sourcepos:sourcepos+1]
 
                 # Add to debug string
-                debug_string += decompresseddata[sourcepos:sourcepos+1].decode()
+                debug_string += repr(decompresseddata[sourcepos:sourcepos+1])
 
                 # Move forward
                 sourcepos += 1
@@ -535,7 +535,7 @@ def explode(compressedstring):
 
         # Error, should not happen
         if pos >= len(bitstream):
-            raise RuntimeErrro("explode(): Tried to read bit #%d behind the length of the bitstream (%d)"
+            raise RuntimeError("explode(): Tried to read bit #%d behind the length of the bitstream (%d)"
                                % (pos+1, len(bitstream)))
 
     # Print
@@ -568,10 +568,12 @@ if __name__ == '__main__':
 
     # Start test program
     print("pwexplode.py - implementation of the PKWARE Data Compression Library format (imploding) for byte streams")
-    print("Copyright (C) 2019 by Sven Kochmann")
+    print("Copyright (C) 2021 by Sven Kochmann")
     print("")
     print("This program comes with ABSOLUTELY NO WARRANTY; This is free software, and you are welcome to redistribute")
     print("it under certain conditions; please see source code for details.")
+    print("")
+    print("Contributors: KOLANICH, sourcekris")
     print("")
 
     print("Running tests:")
